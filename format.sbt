@@ -1,0 +1,1 @@
+scalafmtCheck in ThisBuild := true

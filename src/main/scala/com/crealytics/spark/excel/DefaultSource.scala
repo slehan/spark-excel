@@ -5,20 +5,12 @@ import org.apache.spark.sql.{DataFrame, SQLContext, SaveMode}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
-
-class DefaultSource
-  extends RelationProvider
-  with SchemaRelationProvider
-  with CreatableRelationProvider
-{
+class DefaultSource extends RelationProvider with SchemaRelationProvider with CreatableRelationProvider {
 
   /**
     * Creates a new relation for retrieving data from an Excel file
     */
-  override def createRelation(
-    sqlContext: SQLContext,
-    parameters: Map[String, String]
-  ): ExcelRelation =
+  override def createRelation(sqlContext: SQLContext, parameters: Map[String, String]): ExcelRelation =
     createRelation(sqlContext, parameters, null)
 
   /**
@@ -38,7 +30,10 @@ class DefaultSource
       inferSheetSchema = parameters.get("inferSchema").fold(false)(_.toBoolean),
       addColorColumns = parameters.get("addColorColumns").fold(false)(_.toBoolean),
       startColumn = parameters.get("startColumn").fold(0)(_.toInt),
-      endColumn = parameters.get("endColumn").fold(Int.MaxValue)(_.toInt)
+      endColumn = parameters.get("endColumn").fold(Int.MaxValue)(_.toInt),
+      timestampFormat = parameters.get("timestampFormat"),
+      maxRowsInMemory = parameters.get("maxRowsInMemory").map(_.toInt),
+      excerptSize = parameters.get("excerptSize").fold(10)(_.toInt)
     )(sqlContext)
   }
 
@@ -46,10 +41,13 @@ class DefaultSource
     sqlContext: SQLContext,
     mode: SaveMode,
     parameters: Map[String, String],
-    data: DataFrame): BaseRelation = {
+    data: DataFrame
+  ): BaseRelation = {
     val path = checkParameter(parameters, "path")
     val sheetName = parameters.getOrElse("sheetName", "Sheet1")
     val useHeader = checkParameter(parameters, "useHeader").toBoolean
+    val dateFormat = parameters.getOrElse("dateFormat", ExcelFileSaver.DEFAULT_DATE_FORMAT)
+    val timestampFormat = parameters.getOrElse("timestampFormat", ExcelFileSaver.DEFAULT_TIMESTAMP_FORMAT)
     val filesystemPath = new Path(path)
     val fs = filesystemPath.getFileSystem(sqlContext.sparkContext.hadoopConfiguration)
     val doSave = if (fs.exists(filesystemPath)) {
@@ -72,7 +70,9 @@ class DefaultSource
         filesystemPath,
         data,
         sheetName = sheetName,
-        useHeader = useHeader
+        useHeader = useHeader,
+        dateFormat = dateFormat,
+        timestampFormat = timestampFormat
       )
     }
 
